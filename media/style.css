@@ -1,0 +1,382 @@
+:root {
+  --pet-shadow: rgba(0, 0, 0, 0.18);
+  /* Set from JS — the pet grows a little with every level. */
+  --pet-scale: 0.78;
+}
+
+body {
+  margin: 0;
+  padding: 12px 8px 16px;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-align: center;
+}
+
+/* ---------- stage ---------- */
+.stage {
+  position: relative;
+  height: 130px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.ground {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 150px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pet-shadow);
+  filter: blur(2px);
+}
+
+/* ---------- the pet (pixel art) ---------- */
+.pet {
+  position: relative;
+  transform-origin: center bottom;
+  will-change: transform;
+}
+.pet svg.pixel {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+/* ---------- evolution forms ----------
+   Every sprite ships in the DOM; only the current form is shown. Forms that
+   don't have their own art yet borrow the dog and are re-tinted here. */
+.sprite {
+  display: none;
+}
+.pet--sprite-slime .sprite--slime,
+.pet--sprite-dog .sprite--dog {
+  display: block;
+}
+.pet--stage-wolf .pixel {
+  filter: grayscale(0.6) brightness(0.88);
+}
+.pet--stage-beast .pixel {
+  filter: hue-rotate(-28deg) saturate(1.5) brightness(1.05);
+}
+.pet--stage-dragon .pixel {
+  filter: hue-rotate(118deg) saturate(1.35);
+}
+
+/* idle: slow breathing bob */
+.pet--idle {
+  animation: breathe 3.4s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* typing: small hop */
+.pet--typing {
+  animation: hop 0.5s steps(2, end) infinite;
+}
+@keyframes hop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* working: Claude is busy — the pet randomly cycles these behaviors. */
+
+/* run — steady jog */
+.pet--w-run { animation: run 0.28s steps(2, end) infinite; }
+@keyframes run {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* zoom — frantic zoomies */
+.pet--w-zoom { animation: zoom 0.16s steps(2, end) infinite; }
+@keyframes zoom {
+  0%, 100% { transform: translateY(0) translateX(-3px); }
+  50% { transform: translateY(-8px) translateX(3px); }
+}
+
+/* jump — big hops */
+.pet--w-jump { animation: bigjump 0.6s ease-in-out infinite; }
+@keyframes bigjump {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-22px); }
+  55% { transform: translateY(-22px); }
+}
+
+/* play — chase the ball (lunge forward, bouncing) */
+.pet--w-play { animation: play 0.5s ease-in-out infinite; }
+@keyframes play {
+  0%, 100% { transform: translateX(0) translateY(0) rotate(-4deg); }
+  50% { transform: translateX(-7px) translateY(-6px) rotate(6deg); }
+}
+
+/* spin — chasing its tail (excited shimmy) */
+.pet--w-spin { animation: spin 0.4s ease-in-out infinite; }
+@keyframes spin {
+  0%, 100% { transform: rotate(-10deg) translateX(-2px); }
+  50% { transform: rotate(10deg) translateX(2px); }
+}
+
+/* eat — the pet stays put and noms at the bowl (only the head bobs) */
+.pet--w-eat .head {
+  transform-origin: 128px 60px;
+  animation: nom 0.4s ease-in-out infinite;
+}
+@keyframes nom {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(4px) rotate(9deg); }
+}
+
+/* ---------- slime-specific motion ----------
+   The blob has no head or tail to articulate, so it squashes instead. These
+   rules are scoped by stage class, so they never touch the dog's own .body. */
+.pet--stage-slime .slime-body {
+  transform-origin: 88px 116px;
+}
+.pet--stage-slime.pet--idle {
+  animation: slime-breathe 3.4s ease-in-out infinite;
+}
+@keyframes slime-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.03, 0.96); }
+}
+.pet--stage-slime.pet--w-eat .slime-body {
+  animation: slime-nom 0.4s ease-in-out infinite;
+}
+@keyframes slime-nom {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.1, 0.86); }
+}
+
+/* ---------- tail ----------
+   Still while sleeping; only wags when typing or working. */
+.tail {
+  transform-origin: 40px 88px;
+  transform: rotate(0deg);
+}
+.pet--typing .tail { animation: wag 0.4s ease-in-out infinite; }
+.pet--working .tail { animation: wag 0.22s ease-in-out infinite; }
+@keyframes wag {
+  0%, 100% { transform: rotate(-16deg); }
+  50% { transform: rotate(22deg); }
+}
+
+/* ---------- legs ----------
+   The dog is drawn sitting in profile, so the front leg shares its outline with
+   the chest and the back foot with the rump. Translating either group tears the
+   silhouette at the joint, so running behaviors move the whole pet instead
+   (see .pet--w-run / --w-zoom / --w-play above). The .leg-* groups stay in the
+   markup as hooks for a future standing pose. */
+
+/* ---------- food bowl (only while eating) ---------- */
+.bowl {
+  position: absolute;
+  bottom: 2px;
+  right: 6px;
+  font-size: 22px;
+  line-height: 1;
+  display: none;
+  pointer-events: none;
+}
+.pet--w-eat .bowl { display: block; }
+
+/* ---------- ball (only while playing) ---------- */
+.ball {
+  position: absolute;
+  bottom: 4px;
+  right: 0;
+  font-size: 17px;
+  line-height: 1;
+  display: none;
+  pointer-events: none;
+}
+.pet--w-play .ball {
+  display: block;
+  animation: rolling 0.9s ease-in-out infinite;
+}
+@keyframes rolling {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  50% { transform: translateX(-30px) rotate(-200deg); }
+}
+
+/* ---------- digesting (right after a compaction) ---------- */
+.pet--digesting { animation: digest 1.6s ease-in-out infinite; }
+@keyframes digest {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+.pet--digesting .tail { animation: wag 1.1s ease-in-out infinite; }
+
+/* ---------- size: grows with level, widens when well fed ---------- */
+.pet svg.pixel {
+  transform-origin: center bottom;
+  transform: scale(var(--pet-scale));
+  transition: transform 0.5s ease;
+}
+.pet--fat svg.pixel {
+  transform: scale(var(--pet-scale)) scaleX(1.28) scaleY(1.04);
+}
+
+/* ---------- level up / evolution celebration ----------
+   Two classes so this outranks the stage-scoped idle rules above, and declared
+   last so it wins the cascade against the behavior animations. */
+.pet.pet--pop { animation: pop 0.7s ease-out; }
+@keyframes pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22) translateY(-8px); }
+  100% { transform: scale(1); }
+}
+
+.burst {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  color: var(--vscode-charts-yellow, #d7a300);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.burst--show { animation: burst 1.6s ease-out forwards; }
+.burst--evolve {
+  font-size: 15px;
+  color: var(--vscode-charts-purple, #b180d7);
+}
+@keyframes burst {
+  0% { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.7); }
+  20% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.1); }
+  75% { opacity: 1; transform: translateX(-50%) translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(1); }
+}
+
+/* ---------- eyes: closed while sleeping ---------- */
+.eye-closed { display: none; }
+.pet--idle .eye-open { display: none; }
+.pet--idle .eye-closed { display: block; }
+
+/* blink (awake only) */
+.eye-open {
+  animation: blink 4s steps(1, end) infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.15); }
+}
+
+/* ---------- tongue: only when working ---------- */
+.tongue { display: none; }
+.pet--working .tongue { display: block; }
+
+/* ---------- floating zzz while sleeping ---------- */
+.zzz {
+  position: absolute;
+  top: -4px;
+  right: 18px;
+  width: 40px;
+  height: 44px;
+  pointer-events: none;
+  display: none;
+}
+.pet--idle .zzz { display: block; }
+.zzz span {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  color: var(--vscode-descriptionForeground, #999);
+  font-weight: 700;
+  opacity: 0;
+  animation: floatz 2.7s ease-in-out infinite;
+}
+.zzz span:nth-child(1) { font-size: 10px; animation-delay: 0s; }
+.zzz span:nth-child(2) { font-size: 13px; left: 9px; animation-delay: 0.7s; }
+.zzz span:nth-child(3) { font-size: 16px; left: 19px; animation-delay: 1.4s; }
+@keyframes floatz {
+  0% { transform: translate(0, 6px) scale(0.6); opacity: 0; }
+  25% { opacity: 0.85; }
+  100% { transform: translate(12px, -22px) scale(1.1); opacity: 0; }
+}
+
+/* ---------- HUD ---------- */
+.hud {
+  margin-top: 8px;
+}
+.status {
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 18px;
+}
+
+/* ---------- level & XP ---------- */
+.level-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.level-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.stage-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+.xpbar {
+  margin: 6px auto 0;
+  width: 148px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  /* Plain rgba, not color-mix: VS Code 1.80 ships a Chromium without it. */
+  background: rgba(128, 128, 128, 0.28);
+}
+.xpbar__fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--vscode-progressBar-background, #0e70c0);
+  transition: width 0.4s ease;
+}
+.xp-text {
+  margin-top: 4px;
+  font-size: 10px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-row {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.token-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+.token-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

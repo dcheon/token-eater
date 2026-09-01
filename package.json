@@ -1,0 +1,51 @@
+{
+  "name": "token-eater",
+  "displayName": "Token Eater",
+  "description": "A cute dog in your sidebar that reacts to your typing and Claude Code activity.",
+  "version": "0.0.1",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tokenEater.resetLevel",
+        "title": "Token Eater: 레벨 초기화"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tokenEater",
+          "title": "Token Eater",
+          "icon": "media/dog-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "tokenEater": [
+        {
+          "type": "webview",
+          "id": "tokenEater.petView",
+          "name": "Token Eater"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0"
+  }
+}
