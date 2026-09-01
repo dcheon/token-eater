@@ -15,10 +15,19 @@
   "contributes": {
     "commands": [
       {
-        "command": "tokenEater.resetLevel",
-        "title": "Token Eater: 레벨 초기화"
+        "command": "tokenEater.reset",
+        "title": "Token Eater: Reset"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "tokenEater.reset",
+          "when": "view == tokenEater.petView",
+          "group": "1_actions"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {

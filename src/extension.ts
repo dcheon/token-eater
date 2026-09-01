@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spritesMarkup } from './sprites';
-import { levelProgress, Progress } from './leveling';
+import { levelProgress, Progress, STAGES } from './leveling';
 
 type PetState = 'idle' | 'typing' | 'working' | 'digesting';
 
@@ -77,7 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
     lastStageId = progress.stage.id;
     void vscode.window.showInformationMessage(
-      `✨ Lv ${progress.level} 진화! 펫이 ${progress.stage.emoji} ${progress.stage.name}(이)가 되었습니다.`
+      `Lv ${progress.level}! The pet evolved into ${progress.stage.name}!`
     );
   };
 
@@ -131,23 +131,30 @@ export function activate(context: vscode.ExtensionContext) {
     },
   });
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand('tokenEater.resetLevel', async () => {
-      const yes = '초기화';
-      const answer = await vscode.window.showWarningMessage(
-        '펫의 레벨과 누적 경험치를 모두 지우고 Lv 0 슬라임으로 되돌립니다.',
-        { modal: true },
-        yes
-      );
-      if (answer !== yes) {
-        return;
-      }
-      totalXp = 0;
-      lastStageId = levelProgress(0).stage.id;
-      await context.globalState.update(XP_KEY, 0);
-      render();
-    })
-  );
+  /** Wipe lifetime XP and current food back to 0, dropping the pet back to
+   *  Lv 0 slime. Reachable from the command palette and from the "..." menu
+   *  next to the view title. */
+  const reset = async () => {
+    const yes = 'Reset';
+    const answer = await vscode.window.showWarningMessage(
+      "This resets the pet's level, all-time XP, and current food to 0, dropping it back to Lv 0 Slime.",
+      { modal: true },
+      yes
+    );
+    if (answer !== yes) {
+      return;
+    }
+    totalXp = 0;
+    lastStageId = levelProgress(0).stage.id;
+    food = 0;
+    fat = false;
+    digesting = false;
+    monitor.resetFood();
+    await context.globalState.update(XP_KEY, 0);
+    render();
+  };
+
+  context.subscriptions.push(vscode.commands.registerCommand('tokenEater.reset', reset));
 
   render();
 }
@@ -200,6 +207,14 @@ class ClaudeMonitor {
 
   start() {
     this.timer = setInterval(() => this.tick(), 800);
+  }
+
+  /** Zero out the belly (food) display. The *next* transcript update still
+   *  reflects the real, live context size — this just clears what's shown now. */
+  resetFood() {
+    this.currentContext = 0;
+    this.prevContext = 0;
+    this.compactedAt = 0;
   }
 
   stop() {
@@ -527,8 +542,12 @@ class PetViewProvider implements vscode.WebviewViewProvider {
       xpIntoLevel: p.xpIntoLevel,
       xpForNext: p.xpForNext,
       ratio: p.ratio,
-      stage: { id: p.stage.id, name: p.stage.name, emoji: p.stage.emoji, sprite: p.stage.sprite },
+      stage: { id: p.stage.id, name: p.stage.name, sprite: p.stage.sprite },
       evolvesAt: p.evolvesAt,
+      // Full evolution ladder, sent along so the webview can figure out which
+      // stage each *intermediate* level belongs to when animating a multi-
+      // level jump (levelProgress() only tells us the final stage).
+      stages: STAGES.map((s) => ({ id: s.id, name: s.name, sprite: s.sprite, minLevel: s.minLevel })),
     });
   }
 
@@ -564,18 +583,18 @@ class PetViewProvider implements vscode.WebviewViewProvider {
   </div>
 
   <div class="hud">
-    <div id="status" class="status">😴 자는 중...</div>
+    <div id="status" class="status">Sleeping...</div>
 
     <div class="level-row">
       <span id="level" class="level-badge">Lv 0</span>
-      <span id="stageName" class="stage-name">🫧 슬라임</span>
+      <span id="stageName" class="stage-name">Slime</span>
     </div>
     <div class="xpbar" role="progressbar"><div id="xpFill" class="xpbar__fill"></div></div>
     <div id="xpText" class="xp-text">0 / 0 XP</div>
 
     <div class="token-row">
-      <span class="token-label">🍖 사료</span>
-      <span id="tokens" class="token-value">0 g</span>
+      <span class="token-label">Food</span>
+      <span id="tokens" class="token-value">0 token</span>
     </div>
   </div>
 

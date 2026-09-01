@@ -48,7 +48,6 @@ export interface PetStage {
   /** Stable id — also the `pet--stage-<id>` CSS class. */
   id: string;
   name: string;
-  emoji: string;
   /** First level at which this form appears. */
   minLevel: number;
   /** Which sprite in `sprites.ts` draws this form. */
@@ -63,11 +62,11 @@ export interface PetStage {
  * sprite and are re-tinted in CSS until they get real art.
  */
 export const STAGES: PetStage[] = [
-  { id: 'slime', name: '슬라임', emoji: '🫧', minLevel: 0, sprite: 'slime' },
-  { id: 'puppy', name: '강아지', emoji: '🐶', minLevel: 5, sprite: 'dog' },
-  { id: 'wolf', name: '늑대', emoji: '🐺', minLevel: 12, sprite: 'dog' },
-  { id: 'beast', name: '마수', emoji: '🦁', minLevel: 20, sprite: 'dog' },
-  { id: 'dragon', name: '드래곤', emoji: '🐲', minLevel: 30, sprite: 'dog' },
+  { id: 'slime', name: 'Slime', minLevel: 0, sprite: 'slime' },
+  { id: 'puppy', name: 'Puppy', minLevel: 5, sprite: 'dog' },
+  { id: 'wolf', name: 'Wolf', minLevel: 12, sprite: 'dog' },
+  { id: 'beast', name: 'Beast', minLevel: 20, sprite: 'dog' },
+  { id: 'dragon', name: 'Dragon', minLevel: 30, sprite: 'dog' },
 ];
 
 export function stageForLevel(level: number): PetStage {

@@ -1,68 +1,72 @@
-# Token Eater 🐕
+# Token Eater
 
-사이드바에 사는 펫이 **당신의 타이핑**과 **Claude Code 작업**에 반응합니다.
-Lv 0 슬라임에서 시작해 토큰을 먹을수록 성장하고, 결국 다른 생물로 **진화**합니다.
+A pet living in your sidebar that reacts to **your typing** and **Claude Code activity**.
+It starts as a Lv 0 slime, grows the more tokens it eats, and eventually **evolves** into other creatures.
 
-## 동작 방식
+## How it works
 
-| 상태 | 펫 | 감지 방법 |
+| State | Pet | Detection |
 |------|-----|-----------|
-| 😴 `idle` | 조용히 숨쉬며 대기 | 아무 활동 없음 |
-| 🐾 `typing` | 통통 뛰고 꼬리를 흔듦 | 파일 편집 감지 (`onDidChangeTextDocument`) |
-| 🚀 `working` | 달리기·먹기·공놀이 등을 무작위로 | Claude Code 세션 로그(`~/.claude/projects/*.jsonl`) 갱신 감지 |
-| 😌 `digesting` | 컴팩션 직후 배가 꺼짐 | transcript의 summary 라인 / 컨텍스트 급감 감지 |
+| `idle` | Quietly breathing, waiting | No activity |
+| `typing` | Bouncing, wagging its tail | File edits detected (`onDidChangeTextDocument`) |
+| `working` | Randomly runs / eats / plays fetch | Claude Code session log (`~/.claude/projects/*.jsonl`) updates detected |
+| `digesting` | Belly deflates right after a compaction | Summary line in the transcript / sudden context drop detected |
 
-## 레벨 & 진화
+## Leveling & evolution
 
-펫은 두 가지 수치를 따로 가집니다.
+The pet tracks two separate numbers.
 
-- **🍖 사료 (food)** — *지금* 컨텍스트에 들어있는 토큰 양. 컴팩션이 일어나면 줄어듭니다.
-  auto-compact 지점(약 160k)의 80%를 넘으면 펫이 뚱뚱해집니다.
-- **⭐ XP** — 지금까지 **누적**해서 먹은 토큰 양. 절대 줄지 않고 VS Code `globalState`에
-  영구 저장되어 재시작해도 유지됩니다. 캐시 재사용분(`cache_read`)은 이미 값을 치른
-  컨텍스트를 다시 보내는 것이므로 XP에서 제외합니다.
+- **Food** — the number of tokens *currently* in context. Shrinks when a compaction happens.
+  Once it crosses 80% of the auto-compact point (~160k), the pet gets fat.
+- **XP** — the **cumulative** number of tokens ever eaten. Never decreases, and is persisted
+  forever in VS Code's `globalState`, surviving restarts. Cache reuse (`cache_read`) re-sends
+  context that's already been paid for, so it's excluded from XP.
 
-레벨당 비용은 2,000 토큰에서 시작해 레벨마다 1.18배씩 늘어납니다.
+The cost of each level starts at 2,000 tokens and grows 1.18x per level.
 
-| 단계 | 도달 레벨 | 누적 XP | 아트 |
+| Stage | Reached at | Cumulative XP | Art |
 |------|-----------|---------|------|
-| 🫧 슬라임 | Lv 0 | 0 | ✅ 전용 스프라이트 |
-| 🐶 강아지 | Lv 5 | 약 14,000 | ✅ 전용 스프라이트 |
-| 🐺 늑대 | Lv 12 | 약 70,000 | ⏳ 강아지 + CSS 틴트 (임시) |
-| 🦁 마수 | Lv 20 | 약 293,000 | ⏳ 강아지 + CSS 틴트 (임시) |
-| 🐲 드래곤 | Lv 30 | 약 1,580,000 | ⏳ 강아지 + CSS 틴트 (임시) |
+| Slime | Lv 0 | 0 | dedicated sprite |
+| Puppy | Lv 5 | ~14,000 | dedicated sprite |
+| Wolf | Lv 12 | ~70,000 | puppy sprite + CSS tint (placeholder) |
+| Beast | Lv 20 | ~293,000 | puppy sprite + CSS tint (placeholder) |
+| Dragon | Lv 30 | ~1,580,000 | puppy sprite + CSS tint (placeholder) |
 
-레벨이 오르면 `LEVEL UP!`, 형태가 바뀌면 `✨ 진화! ✨` 연출과 함께 알림이 뜹니다.
-명령 팔레트의 **Token Eater: 레벨 초기화**로 Lv 0 슬라임부터 다시 시작할 수 있습니다.
+Leveling up shows a `LEVEL UP!` notification; changing form shows an `EVOLVED!` one.
+Use **Token Eater: Reset** — from the Command Palette, or the **...** menu next to the
+view's title — to zero out both level/XP and current food, starting back over from Lv 0 Slime.
 
-### 새 진화 단계 추가하기
+### Adding a new evolution stage
 
-1. `src/sprites.ts`에 176×128 그리드(4px 셀) SVG를 추가하고 `SPRITES`에 등록합니다.
-   `.eye-open` / `.eye-closed` / `.tongue` 클래스를 붙이면 잠자기·혀 내밀기 연출이 그대로 붙습니다.
-2. `src/leveling.ts`의 `STAGES` 배열에 `{ id, name, emoji, minLevel, sprite }` 한 줄을 추가합니다.
+1. Add a 176×128 grid (4px cells) SVG to `src/sprites.ts` and register it in `SPRITES`.
+   Attach the `.eye-open` / `.eye-closed` / `.tongue` classes and the sleeping/tongue-out
+   animations come along for free.
+2. Add one line to the `STAGES` array in `src/leveling.ts`: `{ id, name, minLevel, sprite }`.
 
-CSS는 `.pet--stage-<id>` / `.pet--sprite-<id>` 클래스로 자동 연결되므로, 그 외에 손댈 곳은 없습니다.
+CSS wires itself up automatically via the `.pet--stage-<id>` / `.pet--sprite-<id>` classes —
+nothing else needs to change.
 
-## 실행 방법 (개발)
+## Running it (development)
 
 ```bash
 npm install
 npm run compile
 ```
 
-그런 다음 VS Code에서 이 폴더를 열고 **F5**를 누르면 Extension Development Host가 뜹니다.
-왼쪽 액티비티 바의 아이콘을 클릭하세요.
+Then open this folder in VS Code and press **F5** to launch the Extension Development Host.
+Click the icon in the left Activity Bar.
 
-## 참고
+## Notes
 
-- Claude 작업 감지는 **Claude Code CLI**가 `~/.claude/projects/`에 세션 로그를 쓰는 것을
-  기반으로 합니다. Claude Code로 작업을 시작하면 펫이 움직이기 시작합니다.
-- 확장을 처음 켠 시점 이전의 기록은 XP로 쳐주지 않습니다(과거 로그는 세지 않음).
-- 펫 그래픽은 직접 그린 오리지널 SVG라 저작권 문제가 전혀 없습니다.
+- Claude activity detection relies on the **Claude Code CLI** writing session logs to
+  `~/.claude/projects/`. The pet starts moving once you begin working with Claude Code.
+- History from before the extension was first enabled doesn't count toward XP (past logs
+  are not counted).
+- The pet's art is all original, hand-drawn SVG — no copyright concerns.
 
-## 다음 단계 아이디어
+## Ideas for next steps
 
-- 늑대 / 마수 / 드래곤 전용 스프라이트 제작 (현재는 강아지에 CSS 필터를 씌운 임시 형태)
-- 클릭 상호작용(밥 주기 / 쓰다듬기)
-- 진화 갈래 분기(먹은 토큰 종류에 따라 다른 형태로)
-- `references/` 폴더의 스프라이트 시트 활용
+- Dedicated sprites for the wolf / beast / dragon stages (currently a CSS-tinted puppy placeholder)
+- Click interactions (feeding / petting)
+- Branching evolutions (different forms depending on the kind of tokens eaten)
+- Make use of the sprite sheets in the `references/` folder
