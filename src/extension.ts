@@ -19,9 +19,7 @@ const XP_KEY = 'tokenEater.totalXp';
 const SAVE_DEBOUNCE_MS = 5000;
 
 interface MonitorInfo {
-  /** Current context size in tokens = how much "food" is in the belly. */
-  food: number;
-  /** Tokens newly eaten since the last tick — this is what earns XP. */
+  /** Tokens newly eaten since the last tick — this is what earns XP and food. */
   xpGained: number;
   working: boolean;
   digesting: boolean;
@@ -41,6 +39,12 @@ export function activate(context: vscode.ExtensionContext) {
   let claudeWorking = false;
   let digesting = false;
   let fat = false;
+  /**
+   * Tokens eaten since the last reset — what the "Food" readout shows. This is
+   * an intake counter, not the live context size: it only ever grows as Claude
+   * consumes tokens, so a reset actually sticks at 0 instead of snapping back
+   * to whatever the running session already had in context.
+   */
   let food = 0;
   /** Lifetime tokens eaten. Survives restarts; never shrinks on compaction. */
   let totalXp = context.globalState.get<number>(XP_KEY, 0);
@@ -108,12 +112,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- detect Claude Code working via the session transcripts ---
   const monitor = new ClaudeMonitor((info) => {
-    food = info.food;
     claudeWorking = info.working;
     digesting = info.digesting;
     fat = info.fat;
     if (info.xpGained > 0) {
       totalXp += info.xpGained;
+      food += info.xpGained;
       saveXpSoon();
       checkEvolution();
     }
@@ -147,9 +151,6 @@ export function activate(context: vscode.ExtensionContext) {
     totalXp = 0;
     lastStageId = levelProgress(0).stage.id;
     food = 0;
-    fat = false;
-    digesting = false;
-    monitor.resetFood();
     await context.globalState.update(XP_KEY, 0);
     render();
   };
@@ -209,14 +210,6 @@ class ClaudeMonitor {
     this.timer = setInterval(() => this.tick(), 800);
   }
 
-  /** Zero out the belly (food) display. The *next* transcript update still
-   *  reflects the real, live context size — this just clears what's shown now. */
-  resetFood() {
-    this.currentContext = 0;
-    this.prevContext = 0;
-    this.compactedAt = 0;
-  }
-
   stop() {
     if (this.timer) {
       clearInterval(this.timer);
@@ -251,9 +244,12 @@ class ClaudeMonitor {
       }
     }
 
+    // The live context size still drives fatness and the digest animation —
+    // those describe the real session. Only the Food *readout* is an intake
+    // counter, tracked by activate() from xpGained.
     const digesting = now - this.compactedAt < DIGEST_MS;
     const fat = this.currentContext >= FAT_THRESHOLD;
-    this.onUpdate({ food: this.currentContext, xpGained, working, digesting, fat });
+    this.onUpdate({ xpGained, working, digesting, fat });
   }
 
   /**
@@ -559,9 +555,10 @@ class PetViewProvider implements vscode.WebviewViewProvider {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'media', 'main.js')
     );
+    const imgBase = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'img'));
 
     return /* html */ `<!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
@@ -577,7 +574,7 @@ class PetViewProvider implements vscode.WebviewViewProvider {
       <div class="zzz" aria-hidden="true"><span>z</span><span>z</span><span>z</span></div>
       <div class="bowl" aria-hidden="true">🥣</div>
       <div class="ball" aria-hidden="true">🎾</div>
-      ${spritesMarkup()}
+      ${spritesMarkup(imgBase.toString())}
     </div>
     <div id="burst" class="burst" aria-hidden="true"></div>
   </div>
