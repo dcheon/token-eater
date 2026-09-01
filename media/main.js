@@ -11,6 +11,7 @@
   const STATUS = {
     idle: 'Sleeping...',
     typing: 'Typing detected!',
+    calling: 'Claude needs you!',
     digesting: 'Digesting food...',
   };
 

@@ -11,10 +11,26 @@ other creatures.
 | `idle` | Sleeps — the slime plays its 3-frame sleeping loop | No activity |
 | `typing` | Small hop (the dog also wags its tail) | File edits detected (`onDidChangeTextDocument`) |
 | `working` | Randomly cycles run / zoom / eat / play / jump / spin | Claude Code session log (`~/.claude/projects/*.jsonl`) updates detected |
+| `calling` | Hops and tilts toward you with a `!` overhead | Claude is blocked waiting on you (see below) |
 | `digesting` | Belly deflates right after a compaction | Summary line in the transcript / sudden context drop detected |
 
-Priority is `working` > `typing` > `idle`: while Claude is working, file changes are assumed
-to be Claude editing rather than you typing, so the pet doesn't flicker between the two.
+Priority is `calling` > `digesting` > `working` > `typing` > `idle`. While Claude is working,
+file changes are assumed to be Claude editing rather than you typing, so the pet doesn't
+flicker between the two.
+
+### When does it call you over?
+
+Both cases look the same in the transcript — an assistant entry holding a `tool_use` block
+with no `tool_result` back yet — so they're told apart by whether anything is still happening:
+
+- **A question** (the `AskUserQuestion` tool) is unambiguous, so the pet calls immediately.
+- **A permission prompt** is indistinguishable from a tool that's simply still running. What
+  gives it away is that the transcript stops growing, so any other pending tool counts only
+  after it has sat untouched for 10s. A genuinely slow tool (a long build) trips this too —
+  a tolerable miss, since the pet is still telling you nothing is moving.
+
+A transcript that goes stale (untouched for 5 minutes) stops counting entirely, so an
+abandoned session doesn't leave the pet calling forever.
 
 ## The readout
 
@@ -61,8 +77,12 @@ Two kinds of sprite live in `src/sprites.ts`:
   Attach the `.eye-open` / `.eye-closed` / `.tongue` classes and the sleeping/tongue-out
   animations come along for free.
 - **Drawn frames** (the slime) shipped as PNGs from `media/img/` and cross-cut by CSS. It plays
-  frames 1-2-3-2 on a 2.4s loop whenever it isn't eating tokens, and holds frame 1 while Claude
-  works. Its "zZz" is part of the art, so the DOM's own floating `zzz` is hidden for this form.
+  frames 1-2-3-2 on a 2.4s loop while sleeping, and holds frame 1 while working or calling.
+  Its "zZz" is part of the art, so the DOM's own floating `zzz` is hidden for this form.
+
+Only the sleeping pose is drawn for the slime so far, so its working and calling states hold a
+sleeping frame and lean on the whole-pet motion instead. State motions (`.pet--calling` and
+friends) transform the pet as a whole, which is what lets them work for both kinds of sprite.
 
 Anything the webview loads at runtime has to live under `media/` — `.vscodeignore` excludes
 `src/**`, so art kept there would be missing from the packaged `.vsix`. The slime frames are
