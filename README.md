@@ -1,8 +1,7 @@
 # Token Eater
 
-A pet living in your VS Code sidebar that reacts to **your typing** and **Claude Code activity**.
-It starts as a Lv 0 slime, grows the more tokens Claude eats, and eventually **evolves** into
-other creatures.
+A pet that lives in your VS Code sidebar and reacts to **your typing** and **Claude Code activity**.
+It starts as a Lv 0 slime, grows the more tokens it eats, and takes on new forms as it levels up.
 
 ## How it works
 
@@ -14,50 +13,19 @@ other creatures.
 | `calling` | Hops and tilts toward you with a `!` overhead | Claude is blocked waiting on you (see below) |
 | `digesting` | Belly deflates right after a compaction | Summary line in the transcript / sudden context drop detected |
 
-Priority is `calling` > `digesting` > `working` > `typing` > `idle`. While Claude is working,
-file changes are assumed to be Claude editing rather than you typing, so the pet doesn't
-flicker between the two.
-
-### When does it call you over?
-
-Both cases look the same in the transcript — an assistant entry holding a `tool_use` block
-with no `tool_result` back yet — so they're told apart by whether anything is still happening:
-
-- **A question** (the `AskUserQuestion` tool) is unambiguous, so the pet calls immediately.
-- **A permission prompt** is indistinguishable from a tool that's simply still running. What
-  gives it away is that the transcript stops growing, so any other pending tool counts only
-  after it has sat untouched for 10s. A genuinely slow tool (a long build) trips this too —
-  a tolerable miss, since the pet is still telling you nothing is moving.
-
-A transcript that goes stale (untouched for 5 minutes) stops counting entirely, so an
-abandoned session doesn't leave the pet calling forever.
-
-## The readout
-
-- **Lv + stage name**, with an XP bar underneath showing `<into level> / <level cost> XP (<pct>%)`
-  and the level the next evolution lands on.
-- **Food** — tokens eaten, abbreviated past a thousand (`12.3k`, `1.58m`).
-
-Level-ups play Pokémon-style: the bar fills all the way to 100% *first*, and only once it's
-full does the level number flip over. Gaining several levels at once plays that as several
-separate level-ups rather than one jump.
-
-## Leveling & evolution
+## Leveling & forms
 
 The pet tracks two separate numbers.
 
-- **Food** — how many tokens the pet has eaten since the last reset. It counts only
-  *newly consumed* tokens, so a reset actually sticks at 0 instead of snapping back to whatever
-  the running session already had in context. Not persisted across restarts.
-  (Fatness is separate: the pet widens off the *live* context size, once that crosses 80% of
-  the auto-compact point at ~160k.)
-- **XP** — the **cumulative** number of tokens ever eaten. Never decreases, and is persisted in
-  VS Code's `globalState`, surviving restarts. Cache reuse (`cache_read`) re-sends context
-  that's already been paid for, so it's excluded from XP.
+- **Food** — the number of tokens *currently* in context. Shrinks when a compaction happens.
+  Once it crosses 80% of the auto-compact point (~160k), the pet gets fat.
+- **XP** — the **cumulative** number of tokens ever eaten. Never decreases, and is persisted
+  in VS Code's `globalState`, surviving restarts. Cache reuse (`cache_read`) re-sends context
+  that has already been paid for, so it is excluded from XP.
 
 The cost of each level starts at 2,000 tokens and grows 1.18x per level.
 
-| Stage | Reached at | Cumulative XP | Art |
+| Form | Reached at | Cumulative XP | Art |
 |------|-----------|---------|------|
 | Slime | Lv 0 | 0 | 3-frame drawn art |
 | Puppy | Lv 5 | ~14,300 | dedicated sprite |
@@ -89,7 +57,7 @@ Anything the webview loads at runtime has to live under `media/` — `.vscodeign
 committed at their native 152×73 pixel grid with the background already keyed out; scale them
 in CSS rather than shipping large renders.
 
-### Adding a new evolution stage
+### Adding a new form
 
 1. Add a sprite to `src/sprites.ts` (either kind).
 2. Add one line to the `STAGES` array in `src/leveling.ts`: `{ id, name, minLevel, sprite }`.
@@ -111,18 +79,25 @@ Click the Token Eater icon in the left Activity Bar.
 Extension Development Host. Create `.vscode/launch.json` with an `extensionHost` configuration
 pointing `--extensionDevelopmentPath` at the workspace folder.
 
+## Where this is going
+
+The current build raises a single pet along a fixed ladder. The direction I'm working toward
+is a small roster instead: you hatch several different pets — a slime, a puppy, and others —
+and raise them alongside each other rather than watching one form replace the last.
+
+The next pieces of work follow from that:
+
+- Dedicated sprites for every pet, so forms stop borrowing the puppy art
+- A picker for choosing and switching between pets
+- Per-pet XP, so each one grows from your work on its own
+- Click interactions (feeding / petting)
+- Branching growth, where the kind of tokens eaten shapes how a pet turns out
+
 ## Notes
 
 - Claude activity detection relies on the **Claude Code CLI** writing session logs to
   `~/.claude/projects/`. The pet starts moving once you begin working with Claude Code.
-  The log format is undocumented, so this can break when it changes.
-- History from before the extension was first enabled doesn't count toward XP.
-- The pet's art is all original — hand-drawn SVG for the dog, drawn frames for the slime.
-
-## Ideas for next steps
-
-- Dedicated sprites for the wolf / beast / dragon stages (currently a CSS-tinted puppy placeholder)
-- More slime frames for the working/eating states (only the sleeping loop is drawn so far)
-- Click interactions (feeding / petting)
-- Branching evolutions (different forms depending on the kind of tokens eaten)
-- Make use of the sprite sheets in the `references/` folder
+- History from before the extension was first enabled doesn't count toward XP (past logs
+  are not counted).
+- All artwork in this project is AI-generated: both the in-app pet sprites in `src/sprites.ts`
+  and the pose sheets under `references/`, which are kept only as drawing reference.
