@@ -5,7 +5,7 @@ import * as os from 'os';
 import { spritesMarkup } from './sprites';
 import { levelProgress, Progress, STAGES } from './leveling';
 
-type PetState = 'idle' | 'typing' | 'working' | 'digesting';
+type PetState = 'idle' | 'typing' | 'working' | 'calling' | 'digesting';
 
 /** Approx. context size (tokens) at which Claude Code triggers auto-compact. */
 const AUTOCOMPACT_TOKENS = 160000;
@@ -13,17 +13,23 @@ const AUTOCOMPACT_TOKENS = 160000;
 const FAT_THRESHOLD = AUTOCOMPACT_TOKENS * 0.8;
 /** How long the "digesting" (post-compact) animation lingers. */
 const DIGEST_MS = 5000;
+/**
+ * How long a pending tool call has to sit with nothing written before it's
+ * read as Claude waiting on the user (a permission prompt) rather than a tool
+ * still running. Long enough that ordinary fast tools never trigger it.
+ */
+const CALL_STALL_MS = 10000;
 /** globalState key holding lifetime XP. */
 const XP_KEY = 'tokenEater.totalXp';
 /** Don't hit globalState on every 800ms tick. */
 const SAVE_DEBOUNCE_MS = 5000;
 
 interface MonitorInfo {
-  /** Current context size in tokens = how much "food" is in the belly. */
-  food: number;
-  /** Tokens newly eaten since the last tick — this is what earns XP. */
+  /** Tokens newly eaten since the last tick — this is what earns XP and food. */
   xpGained: number;
   working: boolean;
+  /** Claude is blocked on the user — a question, or a permission prompt. */
+  calling: boolean;
   digesting: boolean;
   fat: boolean;
 }
@@ -39,8 +45,15 @@ export function activate(context: vscode.ExtensionContext) {
   // --- shared state ---
   let userTyping = false;
   let claudeWorking = false;
+  let claudeCalling = false;
   let digesting = false;
   let fat = false;
+  /**
+   * Tokens eaten since the last reset — what the "Food" readout shows. This is
+   * an intake counter, not the live context size: it only ever grows as Claude
+   * consumes tokens, so a reset actually sticks at 0 instead of snapping back
+   * to whatever the running session already had in context.
+   */
   let food = 0;
   /** Lifetime tokens eaten. Survives restarts; never shrinks on compaction. */
   let totalXp = context.globalState.get<number>(XP_KEY, 0);
@@ -59,7 +72,11 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   const render = () => {
-    const state: PetState = digesting
+    // Calling outranks everything: it's the one state that wants the user to
+    // look over, and it only happens while Claude is otherwise stopped.
+    const state: PetState = claudeCalling
+      ? 'calling'
+      : digesting
       ? 'digesting'
       : claudeWorking
       ? 'working'
@@ -108,12 +125,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- detect Claude Code working via the session transcripts ---
   const monitor = new ClaudeMonitor((info) => {
-    food = info.food;
     claudeWorking = info.working;
+    claudeCalling = info.calling;
     digesting = info.digesting;
     fat = info.fat;
     if (info.xpGained > 0) {
       totalXp += info.xpGained;
+      food += info.xpGained;
       saveXpSoon();
       checkEvolution();
     }
@@ -147,9 +165,6 @@ export function activate(context: vscode.ExtensionContext) {
     totalXp = 0;
     lastStageId = levelProgress(0).stage.id;
     food = 0;
-    fat = false;
-    digesting = false;
-    monitor.resetFood();
     await context.globalState.update(XP_KEY, 0);
     render();
   };
@@ -209,14 +224,6 @@ class ClaudeMonitor {
     this.timer = setInterval(() => this.tick(), 800);
   }
 
-  /** Zero out the belly (food) display. The *next* transcript update still
-   *  reflects the real, live context size — this just clears what's shown now. */
-  resetFood() {
-    this.currentContext = 0;
-    this.prevContext = 0;
-    this.compactedAt = 0;
-  }
-
   stop() {
     if (this.timer) {
       clearInterval(this.timer);
@@ -228,6 +235,7 @@ class ClaudeMonitor {
     const now = Date.now();
     const newest = this.findNewestJsonl();
     let working = false;
+    let calling = false;
     let xpGained = 0;
 
     if (newest) {
@@ -245,15 +253,19 @@ class ClaudeMonitor {
         if (fresh) {
           const last = this.readLastConversationEntry(newest, stat.size);
           working = this.entryMeansWorking(last);
+          calling = this.entryMeansCalling(last, now - stat.mtimeMs);
         }
       } catch {
         // ignore transient fs errors
       }
     }
 
+    // The live context size still drives fatness and the digest animation —
+    // those describe the real session. Only the Food *readout* is an intake
+    // counter, tracked by activate() from xpGained.
     const digesting = now - this.compactedAt < DIGEST_MS;
     const fat = this.currentContext >= FAT_THRESHOLD;
-    this.onUpdate({ food: this.currentContext, xpGained, working, digesting, fat });
+    this.onUpdate({ xpGained, working, calling, digesting, fat });
   }
 
   /**
@@ -392,6 +404,49 @@ class ClaudeMonitor {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Claude is "calling" when it needs something from the user before it can
+   * carry on. A pending tool call — an assistant entry holding a `tool_use`
+   * block with no `tool_result` back yet — is the shape of every such moment:
+   *
+   *  - AskUserQuestion is unambiguous, so it counts the instant it appears.
+   *  - A permission prompt is indistinguishable in the log from a tool that is
+   *    simply still running, since both are just a pending tool_use. What sets
+   *    it apart is that nothing happens: the transcript stops growing while it
+   *    waits on the user. So any other pending tool counts only once the file
+   *    has sat untouched past CALL_STALL_MS.
+   *
+   * That second rule also fires for genuinely slow tools (a long build, say).
+   * The pet asking for attention during one is a tolerable miss — it still
+   * reads as "nothing is moving over here".
+   */
+  private entryMeansCalling(obj: any, sinceLastWrite: number): boolean {
+    const pending = this.pendingToolNames(obj);
+    if (pending.length === 0) {
+      return false;
+    }
+    if (pending.includes('AskUserQuestion')) {
+      return true;
+    }
+    return sinceLastWrite > CALL_STALL_MS;
+  }
+
+  /** Tool calls in an assistant entry that haven't come back yet. */
+  private pendingToolNames(obj: any): string[] {
+    if (obj?.type !== 'assistant') {
+      return [];
+    }
+    const content = obj?.message?.content;
+    if (!Array.isArray(content)) {
+      return [];
+    }
+    // A returned tool would have put a `user` tool_result entry after this one,
+    // and that entry — not this — would be the last of the conversation.
+    return content
+      .filter((block: any) => block?.type === 'tool_use')
+      .map((block: any) => String(block?.name ?? ''));
   }
 
   /** Guard against unbounded growth of the XP dedupe set. */
@@ -559,9 +614,10 @@ class PetViewProvider implements vscode.WebviewViewProvider {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'media', 'main.js')
     );
+    const imgBase = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'img'));
 
     return /* html */ `<!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
@@ -575,9 +631,10 @@ class PetViewProvider implements vscode.WebviewViewProvider {
     <div class="ground"></div>
     <div id="pet" class="pet pet--idle pet--stage-slime pet--sprite-slime">
       <div class="zzz" aria-hidden="true"><span>z</span><span>z</span><span>z</span></div>
+      <div class="alert" aria-hidden="true">!</div>
       <div class="bowl" aria-hidden="true">🥣</div>
       <div class="ball" aria-hidden="true">🎾</div>
-      ${spritesMarkup()}
+      ${spritesMarkup(imgBase.toString())}
     </div>
     <div id="burst" class="burst" aria-hidden="true"></div>
   </div>

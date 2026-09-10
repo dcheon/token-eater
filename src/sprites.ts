@@ -1,76 +1,30 @@
 /**
- * Pixel-art sprites for each evolution form, as inline SVG.
+ * Sprites for each evolution form.
  *
- * They are inlined (rather than <img src>) so CSS can animate individual parts
- * — the tail, the head, the eyes. Every sprite is drawn on the same 176x128
- * grid in 4px cells, and all of them ship in the DOM at once; CSS shows only
+ * The dog is inline SVG so CSS can animate individual parts — the tail, the
+ * head, the eyes — on the same 176x128 grid in 4px cells. The slime is drawn
+ * art instead, shipped as three PNG frames that CSS cross-cuts between to play
+ * its sleeping motion. Every sprite ships in the DOM at once; CSS shows only
  * the one matching the pet's current form.
  *
- * Shared part classes each sprite should provide where it makes sense:
+ * Shared part classes each SVG sprite should provide where it makes sense:
  *   .eye-open / .eye-closed  — swapped when the pet sleeps
  *   .tongue                  — shown only while Claude is working
  */
 
-/** Lv 0+ — a small blob. Where every pet starts. */
-const SLIME = /* html */ `
-<svg class="pixel sprite sprite--slime" viewBox="0 0 176 128" width="164" height="119" xmlns="http://www.w3.org/2000/svg">
-  <g class="slime-body">
-    <!-- dome: dark outline on each edge, body fill between -->
-    <rect x="80" y="60" width="16" height="4" fill="#1f6f68"/>
-    <rect x="72" y="64" width="4" height="4" fill="#1f6f68"/>
-    <rect x="76" y="64" width="24" height="4" fill="#4fd0bb"/>
-    <rect x="100" y="64" width="4" height="4" fill="#1f6f68"/>
-    <rect x="68" y="68" width="4" height="4" fill="#1f6f68"/>
-    <rect x="72" y="68" width="32" height="4" fill="#4fd0bb"/>
-    <rect x="104" y="68" width="4" height="4" fill="#1f6f68"/>
-    <rect x="64" y="72" width="4" height="4" fill="#1f6f68"/>
-    <rect x="68" y="72" width="40" height="4" fill="#4fd0bb"/>
-    <rect x="108" y="72" width="4" height="4" fill="#1f6f68"/>
-    <rect x="60" y="76" width="4" height="4" fill="#1f6f68"/>
-    <rect x="64" y="76" width="48" height="4" fill="#4fd0bb"/>
-    <rect x="112" y="76" width="4" height="4" fill="#1f6f68"/>
-    <rect x="60" y="80" width="4" height="4" fill="#1f6f68"/>
-    <rect x="64" y="80" width="48" height="4" fill="#4fd0bb"/>
-    <rect x="112" y="80" width="4" height="4" fill="#1f6f68"/>
-    <rect x="56" y="84" width="4" height="4" fill="#1f6f68"/>
-    <rect x="60" y="84" width="56" height="4" fill="#4fd0bb"/>
-    <rect x="116" y="84" width="4" height="4" fill="#1f6f68"/>
-    <rect x="56" y="88" width="4" height="4" fill="#1f6f68"/>
-    <rect x="60" y="88" width="56" height="4" fill="#4fd0bb"/>
-    <rect x="116" y="88" width="4" height="4" fill="#1f6f68"/>
-    <rect x="52" y="92" width="4" height="4" fill="#1f6f68"/>
-    <rect x="56" y="92" width="64" height="4" fill="#4fd0bb"/>
-    <rect x="120" y="92" width="4" height="4" fill="#1f6f68"/>
-    <rect x="52" y="96" width="4" height="4" fill="#1f6f68"/>
-    <rect x="56" y="96" width="64" height="4" fill="#4fd0bb"/>
-    <rect x="120" y="96" width="4" height="4" fill="#1f6f68"/>
-    <rect x="48" y="100" width="4" height="4" fill="#1f6f68"/>
-    <rect x="52" y="100" width="72" height="4" fill="#4fd0bb"/>
-    <rect x="124" y="100" width="4" height="4" fill="#1f6f68"/>
-    <rect x="48" y="104" width="4" height="4" fill="#1f6f68"/>
-    <rect x="52" y="104" width="72" height="4" fill="#35b3a0"/>
-    <rect x="124" y="104" width="4" height="4" fill="#1f6f68"/>
-    <rect x="44" y="108" width="4" height="4" fill="#1f6f68"/>
-    <rect x="48" y="108" width="80" height="4" fill="#35b3a0"/>
-    <rect x="128" y="108" width="4" height="4" fill="#1f6f68"/>
-    <rect x="44" y="112" width="88" height="4" fill="#1f6f68"/>
-    <!-- gloss -->
-    <rect x="80" y="68" width="8" height="4" fill="#bff6ec"/>
-    <rect x="76" y="72" width="8" height="4" fill="#bff6ec"/>
-    <rect x="72" y="76" width="4" height="4" fill="#bff6ec"/>
-    <!-- face -->
-    <g class="eye-open">
-      <rect x="72" y="84" width="8" height="8" fill="#12332f"/>
-      <rect x="96" y="84" width="8" height="8" fill="#12332f"/>
-      <rect x="76" y="84" width="4" height="4" fill="#ffffff"/>
-      <rect x="100" y="84" width="4" height="4" fill="#ffffff"/>
-    </g>
-    <rect class="eye-closed" x="70" y="87" width="12" height="3" fill="#12332f"/>
-    <rect class="eye-closed" x="94" y="87" width="12" height="3" fill="#12332f"/>
-    <rect x="84" y="96" width="8" height="4" fill="#12332f"/>
-    <rect class="tongue" x="84" y="100" width="8" height="6" fill="#e8697d"/>
-  </g>
-</svg>`;
+/**
+ * Lv 0+ — a small blob. Where every pet starts.
+ *
+ * Three frames of the same sleeping pose; CSS cycles them 1-2-3-2 on a loop
+ * (see .slime-frame in style.css). The "zZz" and sparkle are part of the art,
+ * so the DOM's own .zzz element is hidden while this form is showing.
+ */
+const slime = (imgBase: string) => /* html */ `
+<div class="pixel sprite sprite--slime">
+  <img class="slime-frame slime-frame--1" src="${imgBase}/slime_default_1.png" alt="" />
+  <img class="slime-frame slime-frame--2" src="${imgBase}/slime_default_2.png" alt="" />
+  <img class="slime-frame slime-frame--3" src="${imgBase}/slime_default_3.png" alt="" />
+</div>`;
 
 /** Lv 5+ — the original hand-drawn pup, sitting in profile. */
 const DOG = /* html */ `
@@ -256,9 +210,12 @@ const DOG = /* html */ `
   </g>
 </svg>`;
 
-const SPRITES: Record<string, string> = { slime: SLIME, dog: DOG };
-
-/** Every sprite, ready to drop into the webview. CSS reveals the active one. */
-export function spritesMarkup(): string {
-  return Object.values(SPRITES).join('\n');
+/**
+ * Every sprite, ready to drop into the webview. CSS reveals the active one.
+ *
+ * `imgBase` is the webview URI of `media/img` — image sprites have to be
+ * addressed through `asWebviewUri`, so the markup can't be a plain constant.
+ */
+export function spritesMarkup(imgBase: string): string {
+  return [slime(imgBase), DOG].join('\n');
 }

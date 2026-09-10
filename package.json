@@ -1,7 +1,7 @@
 {
   "name": "token-eater",
   "displayName": "Token Eater",
-  "description": "A cute dog in your sidebar that reacts to your typing and Claude Code activity.",
+  "description": "A sidebar pet that eats your Claude Code tokens — it levels up, gets fat, and evolves from slime to dragon.",
   "version": "0.0.1",
   "publisher": "your-publisher-name",
   "engines": {
